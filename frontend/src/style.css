@@ -1,0 +1,37 @@
+@import "tailwindcss";
+
+@layer base {
+  html,
+  body,
+  #app {
+    height: 100%;
+  }
+
+  body {
+    @apply bg-gray-950 text-gray-100 antialiased;
+  }
+}
+
+/* Surcharge du thème Leaflet pour coller au style urbain/sombre */
+@layer components {
+  .leaflet-container {
+    @apply bg-gray-900;
+  }
+
+  .leaflet-popup-content-wrapper,
+  .leaflet-popup-tip {
+    @apply bg-gray-800 text-gray-100 shadow-xl;
+  }
+
+  .leaflet-popup-content-wrapper {
+    @apply rounded-xl border border-gray-700;
+  }
+
+  .leaflet-popup-content {
+    @apply flex items-center justify-center;
+  }
+
+  .leaflet-popup-close-button {
+    @apply text-gray-400;
+  }
+}

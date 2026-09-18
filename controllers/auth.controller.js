@@ -136,3 +136,22 @@ export async function login(req, res, next) {
     next(error);
   }
 }
+
+// GET /api/auth/me — profil de l'utilisateur connecté (JWT requis).
+// Utile au front pour rafraîchir le pseudo et l'XP en temps réel.
+export async function getMe(req, res, next) {
+  try {
+    const [rows] = await pool.query(
+      'SELECT id, pseudo, email, xp, created_at FROM users WHERE id = ? LIMIT 1',
+      [req.user.id]
+    );
+
+    if (rows.length === 0) {
+      throw new HttpError(404, 'Utilisateur introuvable.');
+    }
+
+    res.json({ user: publicUser(rows[0]) });
+  } catch (error) {
+    next(error);
+  }
+}
