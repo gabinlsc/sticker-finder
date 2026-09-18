@@ -16,6 +16,15 @@ export function notFound(req, res, next) {
 // Handler d'erreurs global : logge les erreurs 500 pour le debug,
 // mais ne renvoie au client que des messages neutres dans ce cas.
 export function errorHandler(err, req, res, next) {
+  // Erreurs générées par multer (fichier trop lourd, etc.).
+  if (err.name === 'MulterError') {
+    const message =
+      err.code === 'LIMIT_FILE_SIZE'
+        ? 'Fichier trop volumineux (maximum 5 Mo).'
+        : err.message;
+    return res.status(400).json({ error: message });
+  }
+
   const statusCode = err.statusCode ?? 500;
 
   if (statusCode >= 500) {

@@ -1,6 +1,9 @@
+import path from 'path';
 import express from 'express';
 import cors from 'cors';
 import authRoutes from './routes/auth.routes.js';
+import stickerRoutes from './routes/sticker.routes.js';
+import likeRoutes from './routes/like.routes.js';
 import { errorHandler, notFound } from './middleware/errorHandler.js';
 
 const app = express();
@@ -14,8 +17,14 @@ app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok' });
 });
 
+// --- Fichiers statiques ---
+// Les photos de stickers sont servies depuis public/uploads via /uploads/....
+app.use('/uploads', express.static(path.join(process.cwd(), 'public', 'uploads')));
+
 // --- Routes ---
 app.use('/api/auth', authRoutes);
+app.use('/api/stickers', stickerRoutes);
+app.use('/api', likeRoutes);
 
 // --- Erreurs ---
 // Aucune route trouvée
