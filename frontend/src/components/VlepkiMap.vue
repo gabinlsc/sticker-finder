@@ -75,7 +75,15 @@ function popupContent(sticker) {
     <div class="w-60">
       <img src="${escapeHtml(sticker.photoUrl)}" alt="Sticker" class="h-32 w-full rounded-lg object-cover" />
       ${description}
-      <p class="mt-1 text-xs text-gray-400">par <span class="font-semibold text-lime-400">${escapeHtml(sticker.author.pseudo)}</span></p>
+      <p class="mt-1 text-xs text-gray-400">
+        par
+        <button
+          data-profile="${escapeHtml(sticker.author.pseudo)}"
+          class="cursor-pointer font-semibold text-lime-400 transition hover:text-lime-300 hover:underline"
+        >
+          ${escapeHtml(sticker.author.pseudo)}
+        </button>
+      </p>
       <button data-like="${sticker.id}" class="${likeClasses}">
         ${alreadyLiked ? 'Sticker liké' : 'Liker'}
       </button>
@@ -93,6 +101,12 @@ function onPopupOpen(sticker) {
   const deleteButton = document.querySelector(`[data-delete="${sticker.id}"]`);
   if (deleteButton) {
     deleteButton.addEventListener('click', () => handleDeleteSticker(sticker.id));
+  }
+  const profileButton = document.querySelector(`[data-profile="${sticker.author.pseudo}"]`);
+  if (profileButton) {
+    profileButton.addEventListener('click', () => {
+      router.push(`/user/${encodeURIComponent(sticker.author.pseudo)}`);
+    });
   }
 }
 

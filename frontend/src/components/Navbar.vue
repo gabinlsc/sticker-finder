@@ -40,6 +40,12 @@ function onLogout() {
           >
             + Sticker
           </router-link>
+          <router-link
+            to="/settings"
+            class="rounded-lg border border-gray-700 px-3 py-1.5 text-sm font-semibold text-gray-300 transition hover:border-lime-400/50 hover:text-lime-300"
+          >
+            Paramètres
+          </router-link>
           <button
             @click="onLogout"
             class="rounded-lg border border-gray-700 px-3 py-1.5 text-sm font-semibold text-gray-300 transition hover:border-red-500/60 hover:text-red-400"

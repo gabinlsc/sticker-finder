@@ -4,6 +4,7 @@ import { HttpError } from '../middleware/errorHandler.js';
 import { deleteUploadedFile } from '../utils/files.js';
 
 const TEAM_MAX_LENGTH = 50;
+const BIO_MAX_LENGTH = 300;
 
 // Projection d'une ligne user vers sa représentation publique (profil ouvert
 // à tous au monde). On n'expose jamais email, api_key ni role admin complet.
@@ -12,7 +13,9 @@ function publicProfile(row, stats) {
     pseudo: row.pseudo,
     avatarUrl: row.avatar_url,
     team: row.team,
+    bio: row.bio,
     xp: row.xp,
+    role: row.role,
     createdAt: row.created_at,
     stickers: stats,
   };
@@ -27,7 +30,7 @@ export async function getPublicProfile(req, res, next) {
     }
 
     const [rows] = await pool.query(
-      `SELECT id, pseudo, avatar_url, team, xp, created_at
+      `SELECT id, pseudo, avatar_url, team, bio, xp, role, created_at
        FROM users WHERE pseudo = ? LIMIT 1`,
       [pseudo]
     );
@@ -61,8 +64,8 @@ export async function getPublicProfile(req, res, next) {
   }
 }
 
-// PATCH /api/users/me — l'utilisateur met à jour son équipe (et son avatar
-// si un fichier "avatar" accompagne la requête multipart).
+// PATCH /api/users/me — l'utilisateur met à jour son équipe, sa bio (et son
+// avatar si un fichier "avatar" accompagne la requête multipart).
 export async function updateMe(req, res, next) {
   try {
     const fields = [];
@@ -80,6 +83,15 @@ export async function updateMe(req, res, next) {
       values.push(team);
     }
 
+    if (req.body?.bio !== undefined) {
+      const bio = req.body.bio === '' ? null : String(req.body.bio).trim();
+      if (typeof bio === 'string' && bio.length > BIO_MAX_LENGTH) {
+        throw new HttpError(400, `La bio ne peut pas dépasser ${BIO_MAX_LENGTH} caractères.`);
+      }
+      fields.push('bio = ?');
+      values.push(bio);
+    }
+
     if (req.file?.filename) {
       fields.push('avatar_url = ?');
       values.push(`/uploads/${req.file.filename}`);
@@ -92,7 +104,7 @@ export async function updateMe(req, res, next) {
     }
 
     if (fields.length === 0) {
-      throw new HttpError(400, 'Aucun champ à mettre à jour (team et/ou avatar).');
+      throw new HttpError(400, 'Aucun champ à mettre à jour (team, bio et/ou avatar).');
     }
 
     await pool.query(`UPDATE users SET ${fields.join(', ')} WHERE id = ?`, [
@@ -101,7 +113,7 @@ export async function updateMe(req, res, next) {
     ]);
 
     const [rows] = await pool.query(
-      'SELECT id, pseudo, email, role, avatar_url, team, api_key, xp, created_at FROM users WHERE id = ?',
+      'SELECT id, pseudo, email, role, avatar_url, team, bio, api_key, xp, created_at FROM users WHERE id = ?',
       [req.user.id]
     );
 
@@ -113,6 +125,7 @@ export async function updateMe(req, res, next) {
         role: rows[0].role,
         avatarUrl: rows[0].avatar_url,
         team: rows[0].team,
+        bio: rows[0].bio,
         apiKey: rows[0].api_key,
         xp: rows[0].xp,
         createdAt: rows[0].created_at,
@@ -136,6 +149,40 @@ export async function regenerateApiKey(req, res, next) {
 
     await pool.query('UPDATE users SET api_key = ? WHERE id = ?', [apiKey, req.user.id]);
     res.json({ apiKey });
+  } catch (error) {
+    next(error);
+  }
+}
+
+// DELETE /api/users/me — l'utilisateur supprime son propre compte. Les
+// stickers et likes partent en cascade (FK), les fichiers photos puis
+// l'avatar sont effacés du disque.
+export async function deleteMe(req, res, next) {
+  try {
+    const userId = req.user.id;
+
+    const [rows] = await pool.query(
+      'SELECT photo_url FROM stickers WHERE user_id = ?',
+      [userId]
+    );
+    const [userRows] = await pool.query(
+      'SELECT avatar_url FROM users WHERE id = ?',
+      [userId]
+    );
+    if (userRows.length === 0) {
+      throw new HttpError(404, 'Utilisateur introuvable.');
+    }
+
+    // Supprime d'abord les stickers (files incluses), puis le compte :
+    // la cascade cover les likes.
+    await pool.query('DELETE FROM users WHERE id = ?', [userId]);
+
+    for (const row of rows) {
+      if (row.photo_url) await deleteUploadedFile(row.photo_url);
+    }
+    if (userRows[0]?.avatar_url) await deleteUploadedFile(userRows[0].avatar_url);
+
+    res.json({ message: 'Compte supprimé.' });
   } catch (error) {
     next(error);
   }

@@ -35,6 +35,7 @@ function publicUser(user) {
     role: user.role,
     avatarUrl: user.avatar_url,
     team: user.team,
+    bio: user.bio,
     xp: user.xp,
     apiKey: user.api_key, // exposé uniquement à l'utilisateur lui-même
     createdAt: user.created_at,
@@ -98,6 +99,7 @@ export async function register(req, res, next) {
       role: 'user',
       avatar_url: null,
       team: null,
+      bio: null,
       api_key: apiKey,
       xp: 0,
       created_at: new Date(),
@@ -126,12 +128,12 @@ export async function login(req, res, next) {
       // On compare l'email en minuscules, comme stocké à l'inscription.
       const email = cleanIdentifier.toLowerCase();
       [rows] = await pool.query(
-        'SELECT id, pseudo, email, password_hash, role, avatar_url, team, api_key, xp, created_at FROM users WHERE email = ? LIMIT 1',
+        'SELECT id, pseudo, email, password_hash, role, avatar_url, team, bio, api_key, xp, created_at FROM users WHERE email = ? LIMIT 1',
         [email]
       );
     } else {
       [rows] = await pool.query(
-        'SELECT id, pseudo, email, password_hash, role, avatar_url, team, api_key, xp, created_at FROM users WHERE pseudo = ? LIMIT 1',
+        'SELECT id, pseudo, email, password_hash, role, avatar_url, team, bio, api_key, xp, created_at FROM users WHERE pseudo = ? LIMIT 1',
         [cleanIdentifier]
       );
     }
@@ -158,7 +160,7 @@ export async function login(req, res, next) {
 export async function getMe(req, res, next) {
   try {
     const [rows] = await pool.query(
-      'SELECT id, pseudo, email, role, avatar_url, team, api_key, xp, created_at FROM users WHERE id = ? LIMIT 1',
+      'SELECT id, pseudo, email, role, avatar_url, team, bio, api_key, xp, created_at FROM users WHERE id = ? LIMIT 1',
       [req.user.id]
     );
 

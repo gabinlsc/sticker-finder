@@ -20,6 +20,7 @@ CREATE TABLE IF NOT EXISTS users (
   role          ENUM('user','admin') NOT NULL DEFAULT 'user',
   avatar_url    VARCHAR(255)  DEFAULT NULL,
   team          VARCHAR(50)   DEFAULT NULL,
+  bio           VARCHAR(300)  DEFAULT NULL,
   api_key       VARCHAR(64)   DEFAULT NULL,
   xp            INT UNSIGNED  NOT NULL DEFAULT 0,
   created_at    TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,

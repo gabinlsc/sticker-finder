@@ -5,6 +5,8 @@ import AddSticker from '../components/AddSticker.vue';
 import LoginView from '../views/LoginView.vue';
 import RegisterView from '../views/RegisterView.vue';
 import AdminView from '../views/AdminView.vue';
+import SettingsView from '../views/SettingsView.vue';
+import UserProfileView from '../views/UserProfileView.vue';
 
 const router = createRouter({
   history: createWebHistory(),
@@ -12,6 +14,8 @@ const router = createRouter({
     { path: '/', name: 'home', component: HomeView },
     { path: '/add', name: 'add', component: AddSticker, meta: { requiresAuth: true } },
     { path: '/admin', name: 'admin', component: AdminView, meta: { requiresAuth: true, requiresAdmin: true } },
+    { path: '/settings', name: 'settings', component: SettingsView, meta: { requiresAuth: true } },
+    { path: '/user/:pseudo', name: 'profile', component: UserProfileView },
     { path: '/login', name: 'login', component: LoginView },
     { path: '/register', name: 'register', component: RegisterView },
   ],
