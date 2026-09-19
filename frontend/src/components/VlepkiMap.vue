@@ -1,10 +1,10 @@
 <script setup>
-import { onBeforeUnmount, onMounted, ref } from 'vue';
+import { onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import L from 'leaflet';
 import markerIcon from 'leaflet/dist/images/marker-icon.png';
 import markerIcon2x from 'leaflet/dist/images/marker-icon-2x.png';
 import markerShadow from 'leaflet/dist/images/marker-shadow.png';
-import { useRouter } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import api from '../services/api.js';
 import { TILE_PROVIDERS } from '../services/tileProviders.js';
 import { useAuthStore } from '../stores/auth.js';
@@ -14,6 +14,7 @@ const DEFAULT_ZOOM = 6;
 
 const mapEl = ref(null);
 const router = useRouter();
+const route = useRoute();
 const auth = useAuthStore();
 
 const loading = ref(true);
@@ -57,8 +58,9 @@ function escapeHtml(value) {
 
 function popupContent(sticker) {
   const alreadyLiked = likedStickerIds.value.has(sticker.id);
+  // L'URL de la photo est renvoyée par le serveur, jamais une saisie libre.
   const description = sticker.description
-    ? `<p class="mt-2 text-sm leading-snug text-gray-100">${escapeHtml(sticker.description)}</p>`
+    ? `<p class="mt-2 max-h-24 overflow-y-auto break-words whitespace-pre-line text-sm leading-snug text-gray-100">${escapeHtml(sticker.description)}</p>`
     : '<p class="mt-2 text-sm text-gray-400 italic">Aucune description</p>';
   const likeClasses = alreadyLiked
     ? 'mt-3 w-full cursor-not-allowed rounded-lg bg-gray-700 py-1.5 text-sm font-bold text-gray-400'
@@ -193,6 +195,22 @@ function centerOnUser() {
   );
 }
 
+// Focus un sticker depuis la query (?lat=&lng=&sticker=&zoom=) venue du
+// portfolio : centre la carte et ouvre la popup du marqueur correspondant.
+function focusSticker(query) {
+  const lat = Number(query.lat);
+  const lng = Number(query.lng);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+
+  map.setView([lat, lng], Number(query.zoom) || 15);
+
+  const stickerId = Number(query.sticker);
+  if (Number.isInteger(stickerId) && stickerId > 0) {
+    const marker = markerByStickerId.get(stickerId);
+    if (marker) setTimeout(() => marker.openPopup(), 150);
+  }
+}
+
 // Charge le fournisseur de tuiles courant et bascule sur le suivant si
 // ses tuiles sont barrées (erreur réseau) OU si aucune tuile ne s'est
 // chargée pendant un certain temps (blocage silencieux côté proxy/adblock).
@@ -245,9 +263,17 @@ onMounted(async () => {
 
   loadTileLayer();
 
-  centerOnUser();
+  if (!route.query.lat && !route.query.lng) centerOnUser();
   await loadStickers();
+  focusSticker(route.query);
 });
+
+// Si l'utilisateur clique sur un sticker du portfolio alors qu'il est déjà
+// sur la carte, la query change : on recentre sans recréer la carte.
+watch(
+  () => route.query,
+  (query) => focusSticker(query)
+);
 
 function onResize() {
   map?.invalidateSize();

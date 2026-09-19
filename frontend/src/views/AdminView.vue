@@ -112,7 +112,12 @@ onMounted(loadUsers);
         <tbody class="divide-y divide-gray-800">
           <tr v-for="user in filteredUsers" :key="user.id" class="bg-gray-950/40">
             <td class="px-4 py-3">
-              <p class="font-semibold text-gray-100">{{ user.pseudo }}</p>
+              <RouterLink
+                :to="`/user/${encodeURIComponent(user.pseudo)}`"
+                class="font-semibold text-gray-100 transition hover:text-lime-400 hover:underline"
+              >
+                {{ user.pseudo }}
+              </RouterLink>
               <p class="text-xs text-gray-500">{{ user.email }}</p>
             </td>
             <td class="px-4 py-3">

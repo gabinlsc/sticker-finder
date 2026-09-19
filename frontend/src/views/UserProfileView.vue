@@ -1,9 +1,10 @@
 <script setup>
 import { ref, watch } from 'vue';
-import { useRoute } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import api from '../services/api.js';
 
 const route = useRoute();
+const router = useRouter();
 
 const loading = ref(true);
 const notFound = ref(false);
@@ -28,6 +29,20 @@ function formatDate(value) {
     year: 'numeric',
     month: 'long',
     day: 'numeric',
+  });
+}
+
+// Chaque sticker du portfolio ramène le visiteur sur la carte, centrée
+// sur l'emplacement exact où la photo a été prise (popup ouverte).
+function gotoMap(sticker) {
+  router.push({
+    name: 'home',
+    query: {
+      lat: sticker.lat,
+      lng: sticker.lng,
+      sticker: sticker.id,
+      zoom: 15,
+    },
   });
 }
 
@@ -98,13 +113,20 @@ watch(
         <div
           v-for="sticker in user.stickers.items"
           :key="sticker.id"
-          class="group overflow-hidden rounded-xl border border-gray-800 bg-gray-900"
+          class="group overflow-hidden rounded-xl border border-gray-800 bg-gray-900 transition hover:border-lime-400/50"
         >
-          <img
-            :src="sticker.photoUrl"
-            :alt="sticker.description || 'Sticker'"
-            class="h-40 w-full object-cover transition group-hover:scale-105"
-          />
+          <button
+            type="button"
+            @click="gotoMap(sticker)"
+            class="block w-full cursor-pointer"
+            :title="`Voir sur la carte — ${sticker.description || 'Sans description'}`"
+          >
+            <img
+              :src="sticker.photoUrl"
+              :alt="sticker.description || 'Sticker'"
+              class="h-40 w-full object-cover transition group-hover:scale-105"
+            />
+          </button>
           <div class="px-3 py-2">
             <p class="line-clamp-1 text-xs text-gray-400">{{ sticker.description || 'Sans description' }}</p>
             <p class="mt-1 text-[10px] text-gray-600">{{ formatDate(sticker.createdAt) }}</p>
