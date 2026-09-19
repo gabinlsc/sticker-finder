@@ -74,7 +74,7 @@ export async function deleteUser(req, res, next) {
     }
 
     const [rows] = await pool.query(
-      'SELECT id, avatar_url, photo_url FROM users LEFT JOIN stickers ON stickers.user_id = users.id WHERE users.id = ?',
+      'SELECT u.id AS user_id, u.avatar_url, s.photo_url FROM users u LEFT JOIN stickers s ON s.user_id = u.id WHERE u.id = ?',
       [userId]
     );
     if (rows.length === 0) {
