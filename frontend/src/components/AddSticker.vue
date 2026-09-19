@@ -1,19 +1,62 @@
 <script setup>
 import { onBeforeUnmount, onMounted, ref } from 'vue';
+import L from 'leaflet';
+import markerIcon from 'leaflet/dist/images/marker-icon.png';
+import markerIcon2x from 'leaflet/dist/images/marker-icon-2x.png';
+import markerShadow from 'leaflet/dist/images/marker-shadow.png';
 import { useRouter } from 'vue-router';
 import api from '../services/api.js';
+import { TILE_PROVIDERS } from '../services/tileProviders.js';
 import { useAuthStore } from '../stores/auth.js';
 
 const router = useRouter();
 const auth = useAuthStore();
 
+const DEFAULT_CENTER = [48.8566, 2.3522];
+const DEFAULT_ZOOM = 13;
+
 const imageFile = ref(null);
 const previewUrl = ref('');
 const description = ref('');
 const coords = ref(null);
-const geoStatus = ref('Localisation en cours...');
+const geoStatus = ref('La localisation GPS n’est pas encore définie.');
 const submitting = ref(false);
 const errorMsg = ref('');
+
+const mapEl = ref(null);
+let map = null;
+let tileLayer = null;
+let tileProviderIndex = 0;
+let placedMarker = null;
+let stallTimeout = null;
+let tileLoadedAny = false;
+
+// Fix des icônes Leaflet par défaut avec Vite + chemin d'image vidé
+// (sinon URL préfixée en double -> icône 404 invisible).
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl: markerIcon2x,
+  iconUrl: markerIcon,
+  shadowUrl: markerShadow,
+});
+L.Icon.Default.imagePath = '';
+
+// Déplace (ou crée) le marqueur et enregistre les coordonnées choisies.
+function placeAt(lat, lng, zoom) {
+  coords.value = { lat, lng };
+  if (placedMarker) {
+    placedMarker.setLatLng([lat, lng]);
+  } else {
+    placedMarker = L.marker([lat, lng], { draggable: true }).addTo(map);
+    placedMarker.on('dragend', () => updateFromMarker());
+  }
+  if (zoom) map.setView([lat, lng], zoom);
+}
+
+function updateFromMarker() {
+  const { lat, lng } = placedMarker.getLatLng();
+  coords.value = { lat, lng };
+  geoStatus.value = 'Position choisie sur la carte.';
+}
 
 function handleFile(event) {
   const file = event.target.files?.[0];
@@ -25,24 +68,54 @@ function handleFile(event) {
 
 function requestLocation() {
   if (!navigator.geolocation) {
-    geoStatus.value = 'Géolocalisation non supportée par le navigateur.';
+    geoStatus.value = 'Géolocalisation non supportée par le navigateur. Cliquez sur la carte.';
     return;
   }
 
   geoStatus.value = 'Localisation en cours...';
   navigator.geolocation.getCurrentPosition(
     (position) => {
-      coords.value = {
-        lat: position.coords.latitude,
-        lng: position.coords.longitude,
-      };
-      geoStatus.value = 'Position détectée.';
+      placeAt(position.coords.latitude, position.coords.longitude, 15);
+      geoStatus.value = 'Position GPS détectée — ajustable en cliquant sur la carte.';
     },
     (error) => {
-      geoStatus.value = `Position refusée (${error.message}). Impossible de poster sans localisation.`;
+      geoStatus.value = `Position GPS refusée (${error.message}). Cliquez sur la carte pour placer le sticker.`;
     },
     { enableHighAccuracy: true, timeout: 10000, maximumAge: 30000 }
   );
+}
+
+// Charge les tuiles avec bascule automatique si le fournisseur ne répond pas.
+function loadTileLayer() {
+  const provider = TILE_PROVIDERS[tileProviderIndex];
+  tileLoadedAny = false;
+
+  let switched = false;
+  const switchProvider = () => {
+    if (switched || tileProviderIndex >= TILE_PROVIDERS.length - 1) return;
+    switched = true;
+    clearTimeout(stallTimeout);
+    map.removeLayer(tileLayer);
+    tileProviderIndex += 1;
+    loadTileLayer();
+  };
+
+  tileLayer = L.tileLayer(provider.url, {
+    attribution: provider.attribution,
+    subdomains: provider.subdomains,
+    maxZoom: provider.maxZoom,
+  });
+  tileLayer.on('error', switchProvider);
+  tileLayer.on('tileerror', switchProvider);
+  tileLayer.on('tileload', () => {
+    tileLoadedAny = true;
+    clearTimeout(stallTimeout);
+  });
+  tileLayer.addTo(map);
+
+  stallTimeout = setTimeout(() => {
+    if (!tileLoadedAny) switchProvider();
+  }, 8000);
 }
 
 async function submit() {
@@ -53,8 +126,7 @@ async function submit() {
     return;
   }
   if (!coords.value) {
-    errorMsg.value = "La géolocalisation est requise pour poster un sticker.";
-    requestLocation();
+    errorMsg.value = 'Placez le sticker sur la carte (clic) avant de publier.';
     return;
   }
 
@@ -76,10 +148,26 @@ async function submit() {
   }
 }
 
-onMounted(requestLocation);
+onMounted(() => {
+  map = L.map(mapEl.value, {
+    center: DEFAULT_CENTER,
+    zoom: DEFAULT_ZOOM,
+    attributionControl: { position: 'bottomleft' },
+  });
+  requestAnimationFrame(() => map.invalidateSize());
+  loadTileLayer();
+  map.on('click', (e) => {
+    placeAt(e.latlng.lat, e.latlng.lng);
+    geoStatus.value = 'Position choisie sur la carte.';
+  });
+  requestLocation();
+});
 
 onBeforeUnmount(() => {
+  clearTimeout(stallTimeout);
   if (previewUrl.value) URL.revokeObjectURL(previewUrl.value);
+  placedMarker?.remove();
+  map?.remove();
 });
 </script>
 
@@ -105,7 +193,7 @@ onBeforeUnmount(() => {
           />
           <template v-else>
             <span class="text-3xl text-gray-600">+</span>
-            <span class="text-sm text-gray-400">jpg, png ou webp — max 5 Mo</span>
+            <span class="text-sm text-gray-400">jpg, png ou webp — max 10 Mo</span>
           </template>
           <input type="file" accept="image/jpeg,image/png,image/webp" class="hidden" @change="handleFile" />
         </label>
@@ -125,23 +213,27 @@ onBeforeUnmount(() => {
       </div>
 
       <!-- Position -->
-      <div class="flex items-center justify-between rounded-xl border border-gray-800 bg-gray-900 px-4 py-3">
-        <div>
-          <p class="text-sm font-semibold text-gray-300">Position GPS</p>
-          <p class="text-xs text-gray-400">
-            <template v-if="coords">
-              Lat {{ coords.lat.toFixed(5) }} · Lng {{ coords.lng.toFixed(5) }}
-            </template>
-            <template v-else>{{ geoStatus }}</template>
-          </p>
+      <div>
+        <div class="mb-2 flex items-center justify-between">
+          <label class="block text-sm font-semibold text-gray-300">Position sur la carte</label>
+          <button
+            type="button"
+            @click="requestLocation"
+            class="rounded-lg border border-gray-700 px-3 py-1.5 text-xs font-semibold text-gray-300 transition hover:border-lime-400/60 hover:text-lime-300"
+          >
+            Me localiser
+          </button>
         </div>
-        <button
-          type="button"
-          @click="requestLocation"
-          class="rounded-lg border border-gray-700 px-3 py-1.5 text-xs font-semibold text-gray-300 transition hover:border-lime-400/60 hover:text-lime-300"
-        >
-          Relocaliser
-        </button>
+        <div
+          ref="mapEl"
+          class="h-64 w-full rounded-xl border border-gray-800 bg-gray-900"
+        ></div>
+        <p class="mt-2 text-xs text-gray-400">
+          <template v-if="coords">
+            Lat {{ coords.lat.toFixed(5) }} · Lng {{ coords.lng.toFixed(5) }} — cliquez sur la carte ou déplacez le marqueur.
+          </template>
+          <template v-else>{{ geoStatus }}</template>
+        </p>
       </div>
 
       <p v-if="errorMsg" class="rounded-xl bg-red-950/80 px-4 py-2 text-sm text-red-300">

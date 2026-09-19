@@ -6,7 +6,7 @@ const auth = useAuthStore();
 </script>
 
 <template>
-  <div class="relative h-full w-full">
+  <div class="absolute inset-0">
     <VlepkiMap />
 
     <router-link

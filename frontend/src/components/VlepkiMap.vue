@@ -6,26 +6,11 @@ import markerIcon2x from 'leaflet/dist/images/marker-icon-2x.png';
 import markerShadow from 'leaflet/dist/images/marker-shadow.png';
 import { useRouter } from 'vue-router';
 import api from '../services/api.js';
+import { TILE_PROVIDERS } from '../services/tileProviders.js';
 import { useAuthStore } from '../stores/auth.js';
 
 const DEFAULT_CENTER = [48.8566, 2.3522];
 const DEFAULT_ZOOM = 6;
-
-// Plusieurs fournisseurs de tuiles : si un fournisseur est bloqué ou
-// indisponible (erreur réseau), on bascule automatiquement sur le suivant.
-const TILE_PROVIDERS = [
-  {
-    url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
-    attribution:
-      '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
-    maxZoom: 20,
-  },
-  {
-    url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-    maxZoom: 19,
-  },
-];
 
 const mapEl = ref(null);
 const router = useRouter();
@@ -39,15 +24,25 @@ const likedStickerIds = ref(new Set());
 let map = null;
 let tileLayer = null;
 let tileProviderIndex = 0;
+let stallTimeout = null;
+let tileLoadedAny = false;
 const markers = new Set();
+const markerByStickerId = new Map();
 
 // Fix des icônes Leaflet par défaut avec Vite (les chemins d'assets
 // ne sont pas résolus automatiquement dans les build bundlers).
+// imagePath: '' est indispensable : sans lui, Icon.Default préfixe le
+// chemin importé avec son imagePath détecté -> URL doublée -> icône 404
+// invisible sur la carte.
 L.Icon.Default.mergeOptions({
   iconRetinaUrl: markerIcon2x,
   iconUrl: markerIcon,
   shadowUrl: markerShadow,
 });
+// Vide le chemin auto-détecté par Icon.Default : sinon les URL ci-dessus
+// sont préfixées en double (".../images//node_modules/leaflet/.../icon.png")
+// et le marqueur devient invisible (image 404).
+L.Icon.Default.imagePath = '';
 
 // Échappe toute valeur renvoyée par les utilisateurs avant insertion
 // dans le HTML de la popup (anti-XSS).
@@ -68,6 +63,13 @@ function popupContent(sticker) {
   const likeClasses = alreadyLiked
     ? 'mt-3 w-full cursor-not-allowed rounded-lg bg-gray-700 py-1.5 text-sm font-bold text-gray-400'
     : 'mt-3 w-full rounded-lg bg-lime-400 py-1.5 text-sm font-bold text-gray-950 transition hover:bg-lime-300';
+  const canDelete =
+    auth.isAuthenticated && (auth.isAdmin || auth.user?.id === sticker.author.id);
+  const deleteButton = canDelete
+    ? `<button data-delete="${sticker.id}" class="mt-2 w-full rounded-lg border border-red-500/50 py-1.5 text-sm font-semibold text-red-400 transition hover:bg-red-500/10">
+         Supprimer ce sticker
+       </button>`
+    : '';
 
   return `
     <div class="w-60">
@@ -77,15 +79,20 @@ function popupContent(sticker) {
       <button data-like="${sticker.id}" class="${likeClasses}">
         ${alreadyLiked ? 'Sticker liké' : 'Liker'}
       </button>
+      ${deleteButton}
     </div>
   `;
 }
 
-// À l'ouverture de la popup, attache le handler du bouton "Liker".
+// À l'ouverture de la popup, attache les handlers des boutons.
 function onPopupOpen(sticker) {
-  const button = document.querySelector(`[data-like="${sticker.id}"]`);
-  if (button) {
-    button.addEventListener('click', () => handleLike(sticker.id));
+  const likeButton = document.querySelector(`[data-like="${sticker.id}"]`);
+  if (likeButton) {
+    likeButton.addEventListener('click', () => handleLike(sticker.id));
+  }
+  const deleteButton = document.querySelector(`[data-delete="${sticker.id}"]`);
+  if (deleteButton) {
+    deleteButton.addEventListener('click', () => handleDeleteSticker(sticker.id));
   }
 }
 
@@ -108,8 +115,32 @@ async function handleLike(stickerId) {
       message.value = error.response?.data?.error || 'Impossible de liker ce sticker.';
     }
   } finally {
-    message.closeTimeout = setTimeout(() => (message.value = ''), 3500);
+    flashMessage();
   }
+}
+
+async function handleDeleteSticker(stickerId) {
+  if (!window.confirm('Supprimer définitivement ce sticker ?')) return;
+
+  try {
+    await api.delete(`/api/stickers/${stickerId}`);
+    const marker = markerByStickerId.get(stickerId);
+    if (marker) {
+      marker.remove();
+      markers.delete(marker);
+      markerByStickerId.delete(stickerId);
+    }
+    message.value = 'Sticker supprimé.';
+  } catch (error) {
+    message.value = error.response?.data?.error || 'Impossible de supprimer ce sticker.';
+  } finally {
+    flashMessage();
+  }
+}
+
+function flashMessage() {
+  clearTimeout(message.closeTimeout);
+  message.closeTimeout = setTimeout(() => (message.value = ''), 3500);
 }
 
 function addMarker(sticker) {
@@ -118,6 +149,7 @@ function addMarker(sticker) {
   marker.on('popupopen', () => onPopupOpen(sticker));
   marker.addTo(map);
   markers.add(marker);
+  markerByStickerId.set(sticker.id, marker);
 }
 
 async function loadStickers() {
@@ -145,21 +177,41 @@ function centerOnUser() {
 }
 
 // Charge le fournisseur de tuiles courant et bascule sur le suivant si
-// ses tuiles ne peuvent pas être récupérées (raison n°1 d'une carte grise).
+// ses tuiles sont barrées (erreur réseau) OU si aucune tuile ne s'est
+// chargée pendant un certain temps (blocage silencieux côté proxy/adblock).
 function loadTileLayer() {
   const provider = TILE_PROVIDERS[tileProviderIndex];
+  tileLoadedAny = false;
 
-  tileLayer = L.tileLayer(provider.url, {
-    attribution: provider.attribution,
-    maxZoom: provider.maxZoom,
-  });
-  tileLayer.on('tileerror', () => {
-    if (tileProviderIndex >= TILE_PROVIDERS.length - 1) return;
+  let switched = false;
+  const switchProvider = () => {
+    if (switched || tileProviderIndex >= TILE_PROVIDERS.length - 1) return;
+    switched = true;
+    clearTimeout(stallTimeout);
     map.removeLayer(tileLayer);
     tileProviderIndex += 1;
     loadTileLayer();
+  };
+
+  tileLayer = L.tileLayer(provider.url, {
+    attribution: provider.attribution,
+    subdomains: provider.subdomains,
+    maxZoom: provider.maxZoom,
   });
+
+  tileLayer.on('error', switchProvider);
+  tileLayer.on('tileerror', switchProvider);
+  tileLayer.on('tileload', () => {
+    tileLoadedAny = true;
+    clearTimeout(stallTimeout);
+  });
+
   tileLayer.addTo(map);
+
+  // Filet de sécurité : aucune tuile chargée après 8 s ? Fournisseur suivant.
+  stallTimeout = setTimeout(() => {
+    if (!tileLoadedAny) switchProvider();
+  }, 8000);
 }
 
 onMounted(async () => {
@@ -185,9 +237,11 @@ function onResize() {
 }
 
 onBeforeUnmount(() => {
+  clearTimeout(stallTimeout);
   window.removeEventListener('resize', onResize);
   markers.forEach((marker) => marker.remove());
   markers.clear();
+  markerByStickerId.clear();
   map?.remove();
 });
 </script>

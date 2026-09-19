@@ -28,6 +28,13 @@ function onLogout() {
             <p class="text-xs leading-tight text-lime-400">{{ auth.xp }} XP</p>
           </div>
           <router-link
+            v-if="auth.isAdmin"
+            to="/admin"
+            class="rounded-lg border border-gray-700 px-3 py-1.5 text-sm font-semibold text-gray-300 transition hover:border-lime-400/50 hover:text-lime-300"
+          >
+            Admin
+          </router-link>
+          <router-link
             to="/add"
             class="rounded-lg border border-lime-400/50 px-3 py-1.5 text-sm font-semibold text-lime-300 transition hover:bg-lime-400/10"
           >

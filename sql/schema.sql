@@ -17,11 +17,16 @@ CREATE TABLE IF NOT EXISTS users (
   pseudo        VARCHAR(50)   NOT NULL,
   email         VARCHAR(190)  NOT NULL,
   password_hash VARCHAR(255)  NOT NULL,
+  role          ENUM('user','admin') NOT NULL DEFAULT 'user',
+  avatar_url    VARCHAR(255)  DEFAULT NULL,
+  team          VARCHAR(50)   DEFAULT NULL,
+  api_key       VARCHAR(64)   DEFAULT NULL,
   xp            INT UNSIGNED  NOT NULL DEFAULT 0,
   created_at    TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
   UNIQUE KEY uq_users_pseudo (pseudo),
-  UNIQUE KEY uq_users_email (email)
+  UNIQUE KEY uq_users_email (email),
+  UNIQUE KEY uq_users_api_key (api_key)
 ) ENGINE = InnoDB;
 
 -- -------------------------------------------------------------

@@ -1,5 +1,6 @@
 import pool from '../config/db.js';
 import { HttpError } from '../middleware/errorHandler.js';
+import { deleteUploadedFile } from '../utils/files.js';
 
 const XP_PER_STICKER = 50;
 const DESCRIPTION_MAX_LENGTH = 500;
@@ -108,6 +109,43 @@ export async function createSticker(req, res, next) {
     } finally {
       connection.release();
     }
+  } catch (error) {
+    next(error);
+  }
+}
+
+// DELETE /api/stickers/:id — le créateur du sticker ou un administrateur.
+// Supprime la ligne (les likes sont effacés en cascade) et le fichier photo.
+export async function deleteSticker(req, res, next) {
+  try {
+    const stickerId = Number(req.params.id);
+    if (!Number.isInteger(stickerId) || stickerId <= 0) {
+      throw new HttpError(400, 'Identifiant de sticker invalide.');
+    }
+
+    const [rows] = await pool.query(
+      'SELECT id, user_id, photo_url FROM stickers WHERE id = ?',
+      [stickerId]
+    );
+    if (rows.length === 0) {
+      throw new HttpError(404, 'Sticker introuvable.');
+    }
+
+    const sticker = rows[0];
+    const isOwner = sticker.user_id === req.user.id;
+    const isAdmin = req.user.role === 'admin';
+
+    if (!isOwner && !isAdmin) {
+      throw new HttpError(403, 'Vous ne pouvez supprimer que vos propres stickers.');
+    }
+
+    await pool.query('DELETE FROM stickers WHERE id = ?', [stickerId]);
+    await deleteUploadedFile(sticker.photo_url);
+
+    res.json({
+      deleted: stickerId,
+      message: 'Sticker supprimé.',
+    });
   } catch (error) {
     next(error);
   }
