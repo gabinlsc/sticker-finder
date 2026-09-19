@@ -13,10 +13,12 @@ function serializeSticker(row) {
     lat: Number(row.lat),
     lng: Number(row.lng),
     description: row.description,
+    likes: Number(row.like_count || 0),
     createdAt: row.created_at,
     author: {
       id: row.user_id,
       pseudo: row.pseudo,
+      avatarUrl: row.avatar_url || null,
     },
   };
 }
@@ -26,11 +28,41 @@ export async function getStickers(_req, res, next) {
   try {
     const [rows] = await pool.query(
       `SELECT s.id, s.photo_url, s.lat, s.lng, s.description, s.created_at,
+              COUNT(l.user_id) AS like_count,
+              u.id AS user_id, u.pseudo, u.avatar_url
+       FROM stickers s
+       JOIN users u ON u.id = s.user_id
+       LEFT JOIN likes l ON l.sticker_id = s.id
+       GROUP BY s.id, s.photo_url, s.lat, s.lng, s.description, s.created_at,
+                u.id, u.pseudo, u.avatar_url
+       ORDER BY s.created_at DESC`,
+      []
+    );
+
+    res.json({ stickers: rows.map(serializeSticker) });
+  } catch (error) {
+    next(error);
+  }
+}
+
+// GET /api/stickers/top — classement des stickers les plus likés.
+export async function getTopStickers(req, res, next) {
+  try {
+    const rawLimit = Number(req.query.limit);
+    const limit = Number.isInteger(rawLimit) && rawLimit > 0 ? Math.min(rawLimit, 100) : 12;
+
+    const [rows] = await pool.query(
+      `SELECT s.id, s.photo_url, s.lat, s.lng, s.description, s.created_at,
+              COUNT(l.user_id) AS like_count,
               u.id AS user_id, u.pseudo
        FROM stickers s
        JOIN users u ON u.id = s.user_id
-       ORDER BY s.created_at DESC`,
-      []
+       LEFT JOIN likes l ON l.sticker_id = s.id
+       GROUP BY s.id, s.photo_url, s.lat, s.lng, s.description, s.created_at,
+                u.id, u.pseudo
+       ORDER BY like_count DESC, s.created_at DESC
+       LIMIT ?`,
+      [limit]
     );
 
     res.json({ stickers: rows.map(serializeSticker) });

@@ -5,12 +5,16 @@ import {
   createSticker,
   deleteSticker,
   getStickers,
+  getTopStickers,
 } from '../controllers/sticker.controller.js';
 
 const router = Router();
 
 // Consultation du flux (publique).
 router.get('/', getStickers);
+
+// Classement des stickers les plus likés (publique).
+router.get('/top', getTopStickers);
 
 // Ajout d'un sticker : protégé, upload d'une image unique.
 router.post('/', verifyJWT, uploadImage.single('image'), createSticker);

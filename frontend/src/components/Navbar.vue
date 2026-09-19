@@ -22,6 +22,12 @@ function onLogout() {
       </router-link>
 
       <div class="flex items-center gap-3">
+        <router-link
+          to="/top"
+          class="rounded-lg border border-gray-700 px-3 py-1.5 text-sm font-semibold text-gray-300 transition hover:border-lime-400/50 hover:text-lime-300"
+        >
+          Top
+        </router-link>
         <template v-if="auth.isAuthenticated">
           <div class="hidden text-right sm:block">
             <p class="text-sm font-semibold leading-tight">{{ auth.pseudo }}</p>

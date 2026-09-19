@@ -21,6 +21,7 @@ const loading = ref(true);
 const loadingError = ref('');
 const message = ref('');
 const likedStickerIds = ref(new Set());
+const likesByStickerId = ref(new Map());
 
 let map = null;
 let tileLayer = null;
@@ -58,6 +59,7 @@ function escapeHtml(value) {
 
 function popupContent(sticker) {
   const alreadyLiked = likedStickerIds.value.has(sticker.id);
+  const likes = likesByStickerId.value.get(sticker.id) ?? 0;
   // L'URL de la photo est renvoyée par le serveur, jamais une saisie libre.
   const description = sticker.description
     ? `<p class="mt-2 max-h-24 overflow-y-auto break-words whitespace-pre-line text-sm leading-snug text-gray-100">${escapeHtml(sticker.description)}</p>`
@@ -89,6 +91,7 @@ function popupContent(sticker) {
       <button data-like="${sticker.id}" class="${likeClasses}">
         ${alreadyLiked ? 'Sticker liké' : 'Liker'}
       </button>
+      <p class="mt-1 text-center text-xs text-gray-400">${likes} like${likes > 1 ? 's' : ''}</p>
       ${deleteButton}
     </div>
   `;
@@ -121,6 +124,7 @@ async function handleLike(stickerId) {
   try {
     await api.post(`/api/stickers/${stickerId}/like`);
     likedStickerIds.value.add(stickerId);
+    likesByStickerId.value.set(stickerId, (likesByStickerId.value.get(stickerId) ?? 0) + 1);
     message.value = 'Sticker liké ! +10 XP pour son auteur.';
     await auth.fetchMe();
   } catch (error) {
@@ -131,8 +135,19 @@ async function handleLike(stickerId) {
       message.value = error.response?.data?.error || 'Impossible de liker ce sticker.';
     }
   } finally {
+    refreshPopup(stickerId);
     flashMessage();
   }
+}
+
+// Ré-ouvre la popup pour rafraîchir le compteur de likes et l'état du bouton.
+function refreshPopup(stickerId) {
+  const marker = markerByStickerId.get(stickerId);
+  if (!marker) return;
+  marker.closePopup();
+  setTimeout(() => {
+    if (map?.hasLayer(marker)) marker.openPopup();
+  }, 50);
 }
 
 async function handleDeleteSticker(stickerId) {
@@ -176,7 +191,10 @@ async function loadStickers() {
   loadingError.value = '';
   try {
     const { data } = await api.get('/api/stickers');
-    (data.stickers ?? []).forEach(addMarker);
+    (data.stickers ?? []).forEach((sticker) => {
+      likesByStickerId.value.set(sticker.id, sticker.likes ?? 0);
+      addMarker(sticker);
+    });
   } catch {
     loadingError.value = 'Impossible de charger les stickers. Vérifiez que l’API est démarrée.';
   } finally {

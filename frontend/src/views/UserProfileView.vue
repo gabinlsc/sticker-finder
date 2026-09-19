@@ -129,7 +129,9 @@ watch(
           </button>
           <div class="px-3 py-2">
             <p class="line-clamp-1 text-xs text-gray-400">{{ sticker.description || 'Sans description' }}</p>
-            <p class="mt-1 text-[10px] text-gray-600">{{ formatDate(sticker.createdAt) }}</p>
+            <p class="mt-1 text-[10px] text-gray-600">
+              {{ formatDate(sticker.createdAt) }} · {{ sticker.likes }} like{{ sticker.likes > 1 ? 's' : '' }}
+            </p>
           </div>
         </div>
       </div>

@@ -41,8 +41,14 @@ export async function getPublicProfile(req, res, next) {
 
     const user = rows[0];
     const [stickers] = await pool.query(
-      `SELECT id, photo_url, lat, lng, description, created_at
-       FROM stickers WHERE user_id = ? ORDER BY created_at DESC LIMIT 50`,
+      `SELECT s.id, s.photo_url, s.lat, s.lng, s.description, s.created_at,
+              COUNT(l.user_id) AS like_count
+       FROM stickers s
+       LEFT JOIN likes l ON l.sticker_id = s.id
+       WHERE s.user_id = ?
+       GROUP BY s.id, s.photo_url, s.lat, s.lng, s.description, s.created_at
+       ORDER BY s.created_at DESC
+       LIMIT 50`,
       [user.id]
     );
 
@@ -55,6 +61,7 @@ export async function getPublicProfile(req, res, next) {
           lat: Number(s.lat),
           lng: Number(s.lng),
           description: s.description,
+          likes: Number(s.like_count || 0),
           createdAt: s.created_at,
         })),
       }),

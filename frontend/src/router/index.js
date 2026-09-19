@@ -7,12 +7,14 @@ import RegisterView from '../views/RegisterView.vue';
 import AdminView from '../views/AdminView.vue';
 import SettingsView from '../views/SettingsView.vue';
 import UserProfileView from '../views/UserProfileView.vue';
+import TopStickersView from '../views/TopStickersView.vue';
 
 const router = createRouter({
   history: createWebHistory(),
   routes: [
     { path: '/', name: 'home', component: HomeView },
     { path: '/add', name: 'add', component: AddSticker, meta: { requiresAuth: true } },
+    { path: '/top', name: 'top', component: TopStickersView },
     { path: '/admin', name: 'admin', component: AdminView, meta: { requiresAuth: true, requiresAdmin: true } },
     { path: '/settings', name: 'settings', component: SettingsView, meta: { requiresAuth: true } },
     { path: '/user/:pseudo', name: 'profile', component: UserProfileView },

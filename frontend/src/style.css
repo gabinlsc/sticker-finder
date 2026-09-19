@@ -12,26 +12,36 @@
   }
 }
 
-/* Surcharge du thème Leaflet pour coller au style urbain/sombre */
-@layer components {
-  .leaflet-container {
-    @apply bg-gray-900;
-  }
+/* Surcharge du thème Leaflet pour coller au style urbain/sombre.
+   IMPORTANT : ces règles sont volontairement HORS @layer. En cascade CSS,
+   un style non couche gagne toujours sur un style en couche ; or leaflet.css
+   (importé par le bundle) n'est pas en couche. Si on plaçait ces règles dans
+   @layer components, les `background:#fff` de Leaflet les écraseraient et la
+   popup redeviendrait blanche (texte blanc = invisible). */
+.leaflet-container {
+  background-color: #111827;
+}
 
-  .leaflet-popup-content-wrapper,
-  .leaflet-popup-tip {
-    @apply bg-gray-800 text-gray-100 shadow-xl;
-  }
+.leaflet-popup-content-wrapper,
+.leaflet-popup-tip {
+  background-color: #1f2937;
+  color: #f3f4f6;
+}
 
-  .leaflet-popup-content-wrapper {
-    @apply rounded-xl border border-gray-700;
-  }
+.leaflet-popup-content-wrapper {
+  border: 1px solid #374151;
+  border-radius: 0.75rem;
+  box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.4);
+}
 
-  .leaflet-popup-content {
-    @apply flex items-center justify-center;
-  }
+.leaflet-popup-content {
+  margin: 16px 20px 16px 16px;
+}
 
-  .leaflet-popup-close-button {
-    @apply text-gray-400;
-  }
+.leaflet-popup-close-button {
+  color: #9ca3af;
+}
+
+.leaflet-popup-close-button:hover {
+  color: #f3f4f6;
 }
