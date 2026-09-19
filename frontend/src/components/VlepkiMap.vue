@@ -159,7 +159,10 @@ function flashMessage() {
 
 function addMarker(sticker) {
   const marker = L.marker([Number(sticker.lat), Number(sticker.lng)]);
-  marker.bindPopup(popupContent(sticker), { closeButton: true, minWidth: 240 });
+  // Contenu généré à chaque ouverture : l'état de connexion/rôle et les
+  // likes sont donc toujours à jour (bouton "Supprimer" pour admin,
+  // "Liker" -> "Sticker liké", etc.).
+  marker.bindPopup(() => popupContent(sticker), { closeButton: true, minWidth: 240 });
   marker.on('popupopen', () => onPopupOpen(sticker));
   marker.addTo(map);
   markers.add(marker);
