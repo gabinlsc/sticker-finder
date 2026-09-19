@@ -211,11 +211,11 @@ Captures réelles (app en cours d'exécution, thème sombre) :
 
 | Écran | Aperçu |
 | ----- | ------ |
-| Carte principale avec popup | `docs/screenshots/01-carte.png` |
-| Classement TOP | `docs/screenshots/02-classement.png` |
-| Profil public + portfolio | `docs/screenshots/03-profil.png` |
-| Connexion | `docs/screenshots/04-connexion.png` |
-| Inscription | `docs/screenshots/05-inscription.png` |
+| Carte principale avec popup | ![Carte](./docs/screenshots/01-carte.png) |
+| Classement TOP | ![Classement](./docs/screenshots/02-classement.png) |
+| Profil public + portfolio | ![Profil](./docs/screenshots/03-profil.png) |
+| Connexion | ![Connexion](./docs/screenshots/04-connexion.png) |
+| Inscription | ![Inscription](./docs/screenshots/05-inscription.png) |
 
 ## 📦 Déploiement (notes)
 
