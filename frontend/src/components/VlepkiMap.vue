@@ -11,6 +11,22 @@ import { useAuthStore } from '../stores/auth.js';
 const DEFAULT_CENTER = [48.8566, 2.3522];
 const DEFAULT_ZOOM = 6;
 
+// Plusieurs fournisseurs de tuiles : si un fournisseur est bloqué ou
+// indisponible (erreur réseau), on bascule automatiquement sur le suivant.
+const TILE_PROVIDERS = [
+  {
+    url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+    attribution:
+      '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
+    maxZoom: 20,
+  },
+  {
+    url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+    maxZoom: 19,
+  },
+];
+
 const mapEl = ref(null);
 const router = useRouter();
 const auth = useAuthStore();
@@ -21,6 +37,8 @@ const message = ref('');
 const likedStickerIds = ref(new Set());
 
 let map = null;
+let tileLayer = null;
+let tileProviderIndex = 0;
 const markers = new Set();
 
 // Fix des icônes Leaflet par défaut avec Vite (les chemins d'assets
@@ -126,22 +144,48 @@ function centerOnUser() {
   );
 }
 
+// Charge le fournisseur de tuiles courant et bascule sur le suivant si
+// ses tuiles ne peuvent pas être récupérées (raison n°1 d'une carte grise).
+function loadTileLayer() {
+  const provider = TILE_PROVIDERS[tileProviderIndex];
+
+  tileLayer = L.tileLayer(provider.url, {
+    attribution: provider.attribution,
+    maxZoom: provider.maxZoom,
+  });
+  tileLayer.on('tileerror', () => {
+    if (tileProviderIndex >= TILE_PROVIDERS.length - 1) return;
+    map.removeLayer(tileLayer);
+    tileProviderIndex += 1;
+    loadTileLayer();
+  });
+  tileLayer.addTo(map);
+}
+
 onMounted(async () => {
   map = L.map(mapEl.value, {
     center: DEFAULT_CENTER,
     zoom: DEFAULT_ZOOM,
+    attributionControl: { position: 'bottomleft' },
   });
 
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-    maxZoom: 19,
-  }).addTo(map);
+  // Recalcule les dimensions au premier rendu : évite une carte de
+  // hauteur nulle si la mise en page du conteneur n'est pas terminée.
+  requestAnimationFrame(() => map.invalidateSize());
+  window.addEventListener('resize', onResize);
+
+  loadTileLayer();
 
   centerOnUser();
   await loadStickers();
 });
 
+function onResize() {
+  map?.invalidateSize();
+}
+
 onBeforeUnmount(() => {
+  window.removeEventListener('resize', onResize);
   markers.forEach((marker) => marker.remove());
   markers.clear();
   map?.remove();

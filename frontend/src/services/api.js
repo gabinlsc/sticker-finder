@@ -2,10 +2,13 @@ import axios from 'axios';
 
 // Instance Axios partagée. En dev, /api et /uploads sont proxysés vers
 // le back-end par le serveur Vite (voir vite.config.js).
+//
+// Aucun Content-Type par défaut : axios le pose automatiquement
+// ("application/json" pour un objet JSON, multipart avec boundary pour
+// un FormData). Un Content-Type forcé ici cassait l'upload des photos.
 const api = axios.create({
   baseURL: '/',
   timeout: 15000,
-  headers: { 'Content-Type': 'application/json' },
 });
 
 // Injecte automatiquement le token JWT stocké dans le localStorage.
